@@ -97,3 +97,19 @@ exports.getUserStatus = (req, res, next) => {
             next(err);
         })
 }
+
+exports.setUserStatus = (req, res, next) => {
+    let status = req.body.status;
+    return User.findOne({_id:req.userId})
+        .then(user => {
+            user.status = status;
+            return user.save();
+        })
+        .then(user => {
+            res.status(200).json({message: "OK", status: status});
+        })
+        .catch(err => {
+            if(!error.statusCode) {error.statusCode = 500;}
+            throw err;
+        })
+}

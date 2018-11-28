@@ -34,4 +34,6 @@ router.post('/login', authController.login);
 
 router.get('/status', isAuth, authController.getUserStatus);
 
+router.post('/status', isAuth, authController.setUserStatus);
+
 module.exports = router;

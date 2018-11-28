@@ -9,6 +9,7 @@ const feedController = require('../controllers/feed');
 router.get('/posts', [isAuth], feedController.getPosts);
 
 router.post('/post', [
+    isAuth,
     body('title', 'Title must be at least seven chars')
         .trim()
         .isLength({min:5}),
@@ -17,9 +18,10 @@ router.post('/post', [
         .isLength({min:1})
 ], feedController.createPost);
 
-router.get('/post/:postId', feedController.getPost);
+router.get('/post/:postId', isAuth, feedController.getPost);
 
 router.put('/post/:postId', [
+    isAuth,
     body('title', 'Title must be at least seven chars')
         .trim()
         .isLength({min:5}),
@@ -28,6 +30,6 @@ router.put('/post/:postId', [
         .isLength({min:1})
 ], feedController.updatePost);
 
-router.delete('/post/:postId', feedController.deletePost)
+router.delete('/post/:postId', isAuth, feedController.deletePost)
 
 module.exports = router;

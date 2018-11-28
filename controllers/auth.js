@@ -77,3 +77,23 @@ exports.login = (req, res, next) => {
         })
 
 };
+
+exports.getUserStatus = (req, res, next) => {
+    return User.findOne({_id:req.userId})
+        .then(user => {
+            if(!user) {
+                const error = new Error('No such user.');
+                error.statusCode = 401;
+                throw err;
+            }
+            return user;
+        })
+        .then(user => {
+            res.status(200).json({status: user.status});
+        })
+        .catch(err => {
+            const error = new Error('Unable to locate a matching user.');
+            error.statusCode = 401;
+            next(err);
+        })
+}

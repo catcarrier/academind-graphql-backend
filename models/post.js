@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-
+const User = require('./user');
 const Schema = mongoose.Schema;
 
 const postSchema = new Schema(
@@ -14,7 +14,9 @@ const postSchema = new Schema(
             type: String, required: true
         },
         creator: {
-            type: Object, required: true
+            type: Schema.Types.ObjectId, 
+            ref: User, 
+            required: true
         }
     },
     { timestamps: true }

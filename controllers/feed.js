@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { validationResult } = require('express-validator/check');
-
+const User = require('../models/user');
 const Post = require('../models/post');
 
 exports.getPosts = (req, res, next) => {
@@ -13,14 +13,15 @@ exports.getPosts = (req, res, next) => {
         .then(result => {
             totalItems = result;
             return Post.find()
-                .skip( (currentPage-1) * PER_PAGE )
+                .skip((currentPage - 1) * PER_PAGE)
                 .limit(PER_PAGE);
         })
         .then(posts => {
-            res.status(200).json({ 
-                message: 'OK', 
-                posts: posts, 
-                totalItems:totalItems });
+            res.status(200).json({
+                message: 'OK',
+                posts: posts,
+                totalItems: totalItems
+            });
         })
         .catch(err => {
             if (!err.statusCode) { err.statusCode = 500; }
@@ -58,9 +59,7 @@ exports.createPost = (req, res, next) => {
     if (!errors.isEmpty()) {
         const error = new Error('Validation failed - data not correct');
         error.statusCode = 422;
-
-        // This is synchronous code, OK to throw
-        throw (error);
+        throw (error); // synchronous, use throw
     }
 
     // file upload is required
@@ -78,14 +77,34 @@ exports.createPost = (req, res, next) => {
         title: title,
         imageUrl: imageUrl,
         content: content,
-        creator: { name: 'Thomas' }
+        creator: req.userId // mongoose will convert to ObjectId
     })
+
+    let creator;
+
     post.save()
         .then(result => {
-            //console.log(result);
+            return User.findOne({ _id: req.userId });
+        })
+        .then(user => {
+            if (!user) {
+                const error = new Error('User not found');
+                error.statusCode = 401;
+                return next(error);
+            }
+            creator = user;
+            return user;
+        })
+        .then(user => {
+            // Add this post to the user's list
+            user.posts.push(post)
+            return user.save();
+        })
+        .then(result => {
             res.status(201).json({
                 message: "Post created OK",
-                post: result
+                post: post,
+                creator: { _id: creator._id, name: creator.name }
             })
         })
         .catch(err => {
@@ -96,7 +115,6 @@ exports.createPost = (req, res, next) => {
             }
             next(err);
         })
-
 }
 
 exports.updatePost = (req, res, next) => {
@@ -136,7 +154,18 @@ exports.updatePost = (req, res, next) => {
                 error.errorCode = 404;
                 throw error;
             }
-
+            return post;
+        })
+        .then(post => {
+            // Validate that the current user is the creator of this post.
+            if(post.creator.toString() !== req.userId) {
+                const error = new Error('Not allowed to edit this post.');
+                error.errorCode = 403;
+                throw error;
+            }
+            return post;
+        })
+        .then(post => {
             // If the user sent a new file, these two will not match, 
             // and we whack the old one.
             if (imageUrl /* new value */ != post.imageUrl /* old value */) {
@@ -147,10 +176,11 @@ exports.updatePost = (req, res, next) => {
             post.content = content;
             post.imageUrl = imageUrl;
 
-            console.log('new image ', imageUrl)
+            //console.log('new image ', imageUrl)
 
             return post.save();
         })
+
         .then(post => {
             res.status(200).json({ message: 'Post updated', post: post });
         })
@@ -173,16 +203,45 @@ exports.deletePost = (req, res, next) => {
                 error.errorCode = 404;
                 throw error;
             }
-
-            // TODO
-            // Was this posted created by the current user?
-
-            // TODO whack the image
+            return post;
+        })
+        .then(post => {
+            // Only the post's creator can delete
+            if(post.creator.toString() !== req.userId) {
+                const error = new Error('Not allowed to delete this post.');
+                error.errorCode = 403;
+                throw error;
+            }
+            return post;
+        })
+        .then( post =>{
+            // whack the image
             clearImage(post.imageUrl);
-
             return Post.findByIdAndRemove(postId);
         })
         .then(result => {
+            // Find the user who posted that, and remove it from their post history.
+            // Note that we do not assume it is the current user's User object. This
+            // a precaution in case the post deletion (above) becomes role-based, and
+            // not strictly limited to the post's author.
+            // Note the assumption that the post appears in exactly one user's post history.
+            let postObjectId = require('mongoose').Types.ObjectId(postId);
+            return User.findOne({posts: postObjectId})
+                .then(user => {
+                    if(!user){
+                        const error = new Error('Unable to remove this post from the user history.');
+                        error.errorCode = 500;
+                        throw error;
+                    }
+                    return user;
+                })
+                .then(user => {
+                    var index = user.posts.indexOf(postObjectId);
+                    user.posts.splice(index, 1);
+                    return user.save();
+                })
+        })
+        .then(result => {  
             res.status(200).json({ message: 'Post deleted' });
         })
         .catch(err => {

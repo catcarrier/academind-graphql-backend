@@ -1,5 +1,6 @@
 const express = require('express');
 const authController = require('../controllers/auth');
+const isAuth = require('../middleware/is-auth');
 const User = require('../models/user');
 
 // allow access to the req body for validation; expose the resulting error(s) to the controller.
@@ -30,5 +31,7 @@ router.put('/signup', [
 
 // validation in controller
 router.post('/login', authController.login);
+
+router.get('/status', isAuth, authController.getUserStatus);
 
 module.exports = router;

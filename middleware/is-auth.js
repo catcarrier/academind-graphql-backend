@@ -9,13 +9,12 @@ module.exports = (req, res, next) => {
         throw error;
     }
 
-    const token = authHeader.split(' ')[1]; // 'Bearer <token>' <-- get the token
+    const token = authHeader.split(' ')[1]; // 'Bearer <token>' <-- token comes after the space
     let decodedToken;
     try {
         // TODO import the secret
         decodedToken = jwt.verify(token, 'secret secret hush hush on the QT')   
     } catch(e) {
-        console.log(e)
         e.statusCode = 500;
         throw e;
     }

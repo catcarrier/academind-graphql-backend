@@ -5,14 +5,27 @@ const { validationResult } = require('express-validator/check');
 const Post = require('../models/post');
 
 exports.getPosts = (req, res, next) => {
+    const currentPage = req.query.page || 1;
+    const PER_PAGE = 2; // TODO share between back and front end
+    let totalItems;
     Post.find()
+        .countDocuments()
+        .then(result => {
+            totalItems = result;
+            return Post.find()
+                .skip( (currentPage-1) * PER_PAGE )
+                .limit(PER_PAGE);
+        })
         .then(posts => {
-            res.status(200).json({ message: 'OK', posts: posts });
+            res.status(200).json({ 
+                message: 'OK', 
+                posts: posts, 
+                totalItems:totalItems });
         })
         .catch(err => {
-            if (!err.statusCode) { err.statusCode = 500 }
-            next(err);
-        })
+            if (!err.statusCode) { err.statusCode = 500; }
+            return next(err);
+        });
 }
 
 exports.getPost = (req, res, next) => {
@@ -116,9 +129,9 @@ exports.updatePost = (req, res, next) => {
         throw (err);
     }
 
-    Post.findById({_id: require('mongoose').Types.ObjectId(postId)})
+    Post.findById({ _id: require('mongoose').Types.ObjectId(postId) })
         .then(post => {
-            if(!post) {
+            if (!post) {
                 const error = new Error('No matching post (' + postId + ')');
                 error.errorCode = 404;
                 throw error;
@@ -126,7 +139,7 @@ exports.updatePost = (req, res, next) => {
 
             // If the user sent a new file, these two will not match, 
             // and we whack the old one.
-            if(imageUrl /* new value */ != post.imageUrl /* old value */) {
+            if (imageUrl /* new value */ != post.imageUrl /* old value */) {
                 clearImage(post.imageUrl)
             }
 
@@ -139,11 +152,11 @@ exports.updatePost = (req, res, next) => {
             return post.save();
         })
         .then(post => {
-            res.status(200).json({message:'Post updated', post: post});
+            res.status(200).json({ message: 'Post updated', post: post });
         })
         .catch(err => {
-            if(!err.statusCode) {
-                err.statusCode=500;
+            if (!err.statusCode) {
+                err.statusCode = 500;
             }
             next(err); // use next() in asynch, throw() in synch
         })
@@ -155,7 +168,7 @@ exports.deletePost = (req, res, next) => {
     const postId = req.params.postId;
     Post.findById(postId)
         .then(post => {
-            if(!post) {
+            if (!post) {
                 const error = new Error('No matching post (' + postId + ')');
                 error.errorCode = 404;
                 throw error;
@@ -170,11 +183,11 @@ exports.deletePost = (req, res, next) => {
             return Post.findByIdAndRemove(postId);
         })
         .then(result => {
-            res.status(200).json({message:'Post deleted'});
+            res.status(200).json({ message: 'Post deleted' });
         })
         .catch(err => {
-            if(!err.statusCode) {
-                err.statusCode=500;
+            if (!err.statusCode) {
+                err.statusCode = 500;
             }
             next(err);
         })
@@ -182,5 +195,5 @@ exports.deletePost = (req, res, next) => {
 
 const clearImage = (filePath) => {
     filePath = path.join(__dirname, '..', filePath);
-    fs.unlink(filePath, err => {if(err) {console.log(err)}});
+    fs.unlink(filePath, err => { if (err) { console.log(err) } });
 };

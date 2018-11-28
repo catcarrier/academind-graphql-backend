@@ -4,9 +4,10 @@ const mongoose = require('mongoose');
 const multer = require('multer');
 const MONGDB_URI = 'mongodb://localhost:27017/messages';
 const path = require('path');
+const feedRoutes = require('./routes/feed');
+const authRoutes = require('./routes/auth');
 
 const app = express();
-
 
 app.use(bodyParser.urlencoded({ extended: false })); // x-www.form-urlencoded form
 app.use(bodyParser.json());
@@ -43,7 +44,6 @@ app.use(
 );
 
 app.use('/images', express.static(path.join(__dirname, 'images')));
-const feedRoutes = require('./routes/feed');
 
 app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -53,13 +53,15 @@ app.use((req, res, next) => {
 });
 
 app.use('/feed', feedRoutes);
+app.use('/auth', authRoutes);
 
 app.use((err, req, res, next) => {
     console.log(err);
     const statusCode = err.statusCode || 500;
-    const message = err.message;
+    const data = err.data;
     res.status(statusCode).json({
-        message: message
+        message: err.message,
+        data: data
     })
 });
 

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const io = require('../socket');
 const { validationResult } = require('express-validator/check');
 const User = require('../models/user');
 const Post = require('../models/post');
@@ -12,6 +13,7 @@ exports.getPosts = async (req, res, next) => {
         let totalItems = await Post.find().countDocuments();
         const posts = await Post.find()
             .populate('creator')
+            .sort({createdAt:-1})
             .skip((currentPage - 1) * PER_PAGE)
             .limit(PER_PAGE);
         res.status(200).json({
@@ -71,10 +73,15 @@ exports.createPost = async (req, res, next) => {
 
     try {
         post = await post.save();
+
         // add this post to the user's history
         const user = await User.findOne({ _id: req.userId });
         user.posts.push(post._id);
         await user.save();
+
+        // In emitting the post, append the creator-name. Without this addition, the users
+        // will not see the creator-name until they fetch again.
+        io.getIO().emit('posts', {action: 'create', post: {...post._doc, creator: {name: user.name}}});
         res.status(201).json({
             message: "Post created OK",
             post: post,
@@ -142,6 +149,13 @@ exports.updatePost = async (req, res, next) => {
         post.imageUrl = imageUrl;
 
         post = await post.save();
+
+        // Look up the post creator, so we can pass that info when we emit.
+        // Without this precaution, recipients would not see the creator-name
+        // until they fetch the post again, becuase it's not stored with the post.
+        post = await post.populate('creator', {'name':1, '_id':0}).execPopulate();
+        io.getIO().emit('posts', {action: 'update', post: post});
+
         res.status(200).json({ message: 'Post updated', post: post });
     } catch (e) {
         if (!e.statusCode) {
@@ -190,6 +204,8 @@ exports.deletePost = async (req, res, next) => {
         var index = user.posts.indexOf(postObjectId);
         user.posts.splice(index, 1);
         await user.save();
+
+        io.getIO().emit('posts', {action:'remove', _id:postId});
 
         res.status(200).json({ message: 'Post deleted' });
     } catch (e) {

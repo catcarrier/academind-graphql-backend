@@ -6,6 +6,7 @@ const MONGDB_URI = 'mongodb://localhost:27017/messages';
 const path = require('path');
 const feedRoutes = require('./routes/feed');
 const authRoutes = require('./routes/auth');
+const socket = require('./socket');
 
 const app = express();
 
@@ -70,7 +71,7 @@ mongoose.connect(MONGDB_URI, { useNewUrlParser: true }, (err) => {
         console.log(err)
     } else {
         const server = app.listen(8080);
-        const io = require('socket.io')(server);
+        const io = socket.init(server);
         io.on('connection', socket => {
             console.log('client connected');
         });

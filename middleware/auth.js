@@ -4,9 +4,8 @@ const jwt = require('jsonwebtoken');
 module.exports = (req, res, next) => {
     const authHeader = req.get('Authorization');
     if(!authHeader) {
-        const error = new Error('Not authenticated');
-        error.statusCode = 401;
-        throw error;
+        req.isAuth = false; // User is not authenticated; handle this in the resolver, not here
+        return next();
     }
 
     const token = authHeader.split(' ')[1]; // 'Bearer <token>' <-- token comes after the space
@@ -15,16 +14,16 @@ module.exports = (req, res, next) => {
         // TODO import the secret
         decodedToken = jwt.verify(token, 'secret secret hush hush on the QT')   
     } catch(e) {
-        e.statusCode = 500;
-        throw e;
+        req.isAuth = false; // user not authenticated, let the resolver handle it
+        return next();
     }
 
     if(!decodedToken) {
-        const error = new Error('Not authenticated');
-        error.statusCode = 401;
-        throw error;
+        req.isAuth = false; // user not authenticated, let the resolver handle it
+        return next();
     }
 
     req.userId = decodedToken.userId;
+    req.isAuth = true;
     next();
 }

@@ -7,6 +7,7 @@ const path = require('path');
 const graphqlHttp = require('express-graphql');
 const graphqlSchema = require('./graphql/schema.js');
 const graphqlResolver = require('./graphql/resolver.js');
+const auth = require('./middleware/auth');
 
 const app = express();
 
@@ -60,6 +61,11 @@ app.use((req, res, next) => {
 
     next();
 });
+
+// sets req.isAuth to true/false based on token, but does not redirect.
+// It is left up to the resolver to allow the user to continue, or not.
+// This is because with graphql there are no more routes, so we do not redirect etc.
+app.use(auth); 
 
 app.use('/graphql', graphqlHttp({
     schema: graphqlSchema,

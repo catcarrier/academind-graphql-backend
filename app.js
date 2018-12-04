@@ -4,9 +4,9 @@ const mongoose = require('mongoose');
 const multer = require('multer');
 const MONGDB_URI = 'mongodb://localhost:27017/messages';
 const path = require('path');
-const feedRoutes = require('./routes/feed');
-const authRoutes = require('./routes/auth');
-const socket = require('./socket');
+const graphqlHttp = require('express-graphql');
+const graphqlSchema = require('./graphql/schema.js');
+const graphqlResolver = require('./graphql/resolver.js');
 
 const app = express();
 
@@ -50,11 +50,35 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'OPTIONS, GET, POST, PUT, DELETE');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+    // Graphql rejects any request that is not a POST, so the usual preflight OPTIONS check
+    // will get a 405 (Not Allowed) back unless we intercept the preflight as follows.
+    // Options requests do not reach the Graphql handler.
+    if(req.method==='OPTIONS') {
+        return res.sendStatus(200);
+    }
+
     next();
 });
 
-app.use('/feed', feedRoutes);
-app.use('/auth', authRoutes);
+app.use('/graphql', graphqlHttp({
+    schema: graphqlSchema,
+    rootValue: graphqlResolver,
+    formatError(err) {
+        if(!err.originalError) {
+            return err; // system-thrown error eg a nullpointer
+        }
+        const data = err.originalError.data;
+        const message = err.message || "An error occurred";
+        const code = err.originalError.statusCode | 500;
+        return {
+            message: message,
+            status: code,
+            data: data
+        }
+    },
+    graphiql: true
+}))
 
 app.use((err, req, res, next) => {
     console.log(err);
@@ -70,12 +94,7 @@ mongoose.connect(MONGDB_URI, { useNewUrlParser: true }, (err) => {
     if (err) {
         console.log(err)
     } else {
-        const server = app.listen(8080);
-        const io = socket.init(server);
-        io.on('connection', socket => {
-            console.log('client connected');
-        });
-
+        app.listen(8080);
     }
 })
 

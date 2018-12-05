@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const multer = require('multer');
 const MONGDB_URI = 'mongodb://localhost:27017/messages';
 const path = require('path');
+const fs = require('fs');
 const graphqlHttp = require('express-graphql');
 const graphqlSchema = require('./graphql/schema.js');
 const graphqlResolver = require('./graphql/resolver.js');
@@ -18,7 +19,7 @@ const fileStorage = multer.diskStorage({
     filename: (req, file, cb) => {
         // for Windows: remove colons
 
-        const newFilename = new Date()
+        const newFilename = 'img' + new Date()
             .toISOString()
             .replace(/:/g, '-')
             .replace(/\s/g, '') + '-' + file.originalname.replace(/\\/g, '/').replace(/\s/g, '');
@@ -67,6 +68,28 @@ app.use((req, res, next) => {
 // This is because with graphql there are no more routes, so we do not redirect etc.
 app.use(auth); 
 
+// Becuase we are using graphql, which handles only json, we need a way
+// for the user to upload an image as part of creating a post. Multer (see
+// above) will have extracted the file and put in /images folder.
+app.put('/postImage', (req, res, next) => {
+
+    if(!req.isAuth) {
+        const err = new Error('User not authenticated');
+        err.code = 401;
+        throw err;
+    }
+
+    // Request exposes file upload in the .file property. This might be
+    // falsy if the user is performing an update and not changing the image.
+    if(!req.file){
+        return res.status(200).json({message:'No file provided.'});
+    }
+    if(req.body.oldPath) {
+        clearImage(req.body.oldPath);
+    }
+    return res.status(201).json({message:'File stored', filePath:req.file.path});
+})
+
 app.use('/graphql', graphqlHttp({
     schema: graphqlSchema,
     rootValue: graphqlResolver,
@@ -104,3 +127,7 @@ mongoose.connect(MONGDB_URI, { useNewUrlParser: true }, (err) => {
     }
 })
 
+const clearImage = (filePath) => {
+    filePath = path.join(__dirname, '..', filePath);
+    fs.unlink(filePath, err => { if (err) { console.log(err) } });
+};

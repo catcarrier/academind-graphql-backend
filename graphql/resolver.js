@@ -90,11 +90,13 @@ module.exports = {
     },
     createPost: async function (args, req) {
 
+
         if (!req.isAuth) { /* see middleware just before graphql handler */
-            const error = new Error('Not authenticated');
+            const error = new Error('User is not authenticated');
             error.statusCode = 401;
             throw error;
         }
+
 
         const input = args.postInput;
 
@@ -112,12 +114,14 @@ module.exports = {
             throw error;
         }
 
+
         const user = await User.findById(req.userId);
         if (!user) {
             const error = new Error('Invalid user!');
             error.statusCode = 401;
             throw error;
         }
+
 
         const newPost = new Post({
             title: input.title,
@@ -127,8 +131,10 @@ module.exports = {
         });
         const createdPost = await newPost.save();
 
+
         user.posts.push(createdPost);
         await user.save();
+
 
         // Return must have the post _id as String, as GraphQL does not know about mongo _ids.
         // Return must have the date fields as String, as GraphQL does not know about dates.
@@ -139,6 +145,7 @@ module.exports = {
             createdAt: createdPost.createdAt.toISOString(),
             updatedAt: createdPost.updatedAt.toISOString()
         };
+
 
         return returnObject;
     },
@@ -171,5 +178,30 @@ module.exports = {
                 }
             })
         }
+    },
+    getPost: async function({id}, req) {
+        if (!req.isAuth) {
+            const error = new Error('User not authenticated');
+            error.code = 401;
+            throw error;
+        }
+        const post = await Post.findById(id)
+            .populate('creator', 'name -_id');
+        if(!post) {
+            const error = new Error('No such post');
+            error.code = 404;
+            throw error;
+        }
+
+        return {
+            _id: post._id.toString(),
+            title: post.title,
+            content: post.content,
+            imageUrl: post.imageUrl,
+            creator: post.creator,
+            createdAt: post.createdAt.toISOString(),
+            updatedAt: post.updatedAt.toISOString()
+        }
+
     }
 }

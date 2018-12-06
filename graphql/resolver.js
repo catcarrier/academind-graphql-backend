@@ -149,7 +149,7 @@ module.exports = {
 
         return returnObject;
     },
-    getPosts: async function ({currentPage}, req) {
+    getPosts: async function ({ currentPage }, req) {
 
         if (!req.isAuth) {
             const error = new Error('User not authenticated');
@@ -157,7 +157,7 @@ module.exports = {
             throw error;
         }
 
-        if(!currentPage) { currentPage = 1 }
+        if (!currentPage) { currentPage = 1 }
 
         const PER_PAGE = 3;
         let totalPosts = await Post.find().countDocuments();
@@ -179,7 +179,7 @@ module.exports = {
             })
         }
     },
-    getPost: async function({id}, req) {
+    getPost: async function ({ id }, req) {
         if (!req.isAuth) {
             const error = new Error('User not authenticated');
             error.code = 401;
@@ -187,7 +187,7 @@ module.exports = {
         }
         const post = await Post.findById(id)
             .populate('creator', 'name -_id');
-        if(!post) {
+        if (!post) {
             const error = new Error('No such post');
             error.code = 404;
             throw error;
@@ -201,6 +201,68 @@ module.exports = {
             creator: post.creator,
             createdAt: post.createdAt.toISOString(),
             updatedAt: post.updatedAt.toISOString()
+        }
+
+    },
+    updatePost: async function ({ id, postInput }, req) {
+
+        if (!req.isAuth) {
+            const error = new Error('User not authenticated');
+            error.code = 401;
+            throw error;
+        }
+
+        const post = await Post.findById(id)
+            .populate('creator', 'name');
+        if (!post) {
+            const error = new Error('No such post');
+            error.code = 404;
+            throw error;
+        }
+
+        // Allow edit only if current user created this post.
+        if(post.creator._id.toString() !== req.userId.toString()) {
+            const err = new Error('Not authorized')
+            err.code = 403;
+            throw err;
+        }
+
+        // Validate the updated post values
+        const errors = [];
+        if (validator.isEmpty(postInput.title)) {
+            errors.push(new Error('title is required'));
+        }
+        if (validator.isEmpty(postInput.content)) {
+            errors.push(new Error('Post content is required'));
+        }
+        if (errors.length > 0) {
+            const error = new Error('Invalid input');
+            error.data = errors;
+            error.statusCode = 422;
+            throw error;
+        }
+
+        post.title = postInput.title;
+        post.content = postInput.content;
+        if( postInput.imageUrl ) {
+            post.imageUrl = postInput.imageUrl;
+        }
+        
+        let updatedPost;
+        try {
+            updatedPost = await post.save();
+        } catch(e) {
+            console.log(e)
+            throw e
+        }
+       
+        // The return value replaces mongo _ids with Strings
+        // becuase Graphql does not know about _ids.
+        return {
+            ...updatedPost._doc,
+            _id: updatedPost._id.toString(),
+            createdAt: updatedPost.createdAt.toISOString(),
+            updatedAt: updatedPost.updatedAt.toISOString()
         }
 
     }

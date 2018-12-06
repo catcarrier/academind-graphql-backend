@@ -3,8 +3,28 @@ const Post = require('../models/post');
 const bcrypt = require('bcryptjs');
 const validator = require('validator');
 const jwt = require('jsonwebtoken');
+const fs = require('fs');
+const path = require('path');
 
 module.exports = {
+    getUserStatus: async function(args, req) {
+        if(!req.isAuth) {
+            return '';
+        }
+
+        const user = await User.findById(req.userId);
+        return user.status;
+    },
+    setUserStatus: async function({newStatus}, req) {
+        if(!req.isAuth) {
+            return;
+        }
+
+        const user = await User.findById(req.userId);
+        user.status = newStatus;
+        await user.save();
+        return user.status;
+    },
     createUser: async function (args, req) {
         const email = args.userInput.email;
         const name = args.userInput.name;
@@ -131,10 +151,8 @@ module.exports = {
         });
         const createdPost = await newPost.save();
 
-
         user.posts.push(createdPost);
         await user.save();
-
 
         // Return must have the post _id as String, as GraphQL does not know about mongo _ids.
         // Return must have the date fields as String, as GraphQL does not know about dates.
@@ -145,7 +163,6 @@ module.exports = {
             createdAt: createdPost.createdAt.toISOString(),
             updatedAt: createdPost.updatedAt.toISOString()
         };
-
 
         return returnObject;
     },
@@ -221,7 +238,7 @@ module.exports = {
         }
 
         // Allow edit only if current user created this post.
-        if(post.creator._id.toString() !== req.userId.toString()) {
+        if (post.creator._id.toString() !== req.userId.toString()) {
             const err = new Error('Not authorized')
             err.code = 403;
             throw err;
@@ -244,18 +261,18 @@ module.exports = {
 
         post.title = postInput.title;
         post.content = postInput.content;
-        if( postInput.imageUrl ) {
+        if (postInput.imageUrl) {
             post.imageUrl = postInput.imageUrl;
         }
-        
+
         let updatedPost;
         try {
             updatedPost = await post.save();
-        } catch(e) {
+        } catch (e) {
             console.log(e)
             throw e
         }
-       
+
         // The return value replaces mongo _ids with Strings
         // becuase Graphql does not know about _ids.
         return {
@@ -265,5 +282,68 @@ module.exports = {
             updatedAt: updatedPost.updatedAt.toISOString()
         }
 
+    },
+    deletePost: async function ({ id }, req) {
+
+        if (!req.isAuth) {
+            const error = new Error('User not authenticated');
+            error.code = 401;
+            throw error;
+        }
+
+        // only post creator can delete
+        const post = await Post.findById(id)
+            .populate('creator', 'name');
+        if (!post) {
+            const error = new Error('No such post');
+            error.code = 404;
+            throw error;
+        }
+
+        if (post.creator._id.toString() !== req.userId.toString()) {
+            const err = new Error('Not authorized')
+            err.code = 403;
+            throw err;
+        }
+
+        // delete the image
+        clearImage(post.imageUrl);
+
+        let removedPost;
+        try {
+            removedPost = await post.remove();
+        } catch(e) {
+            console.log(e);
+            const err = new Error('Unable to delete post ' + id);
+            err.code = 500;
+            throw err;
+        }
+
+        // Remove this post from the user's history
+        // Note the assumption that it appears in only one user's history,
+        // and that the current user is that user.
+        //
+        // Note that user.posts is an [] of ObjectIds, not Strings, so we use == not ===.
+        const user = await User.findById({_id: req.userId}); // userId is String, relying on Mongoose to cast for us
+        const postIndex = user.posts.findIndex(i => i == id);
+        if(postIndex > -1) {
+            user.posts.splice(postIndex, 1);
+            await user.save();
+        }
+
+        // Return the removed post, with dates as strings (Graphql does
+        // not support mongo dates)
+        return {
+            ...removedPost._doc,
+            _id: removedPost._id.toString(),
+            createdAt: removedPost.createdAt.toISOString(),
+            updatedAt: removedPost.updatedAt.toISOString()
+        }
     }
+     
 }
+
+const clearImage = (filePath) => {
+    filePath = path.join(__dirname, '..', filePath);
+    fs.unlink(filePath, err => { if (err) { console.log(err) } });
+};

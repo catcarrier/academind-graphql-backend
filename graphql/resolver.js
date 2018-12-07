@@ -7,14 +7,20 @@ const fs = require('fs');
 const path = require('path');
 
 module.exports = {
-    getUserStatus: async function(args, req) {
+    getUser: async function(args, req) {
         if(!req.isAuth) {
             return '';
         }
 
-        const user = await User.findById(req.userId);
-        return user.status;
+        // No password or posts
+        const user = await User.findById(req.userId, 'name status email');
+
+        return {
+            ...user._doc,
+            _id: user._id.toString()
+        }
     },
+    
     setUserStatus: async function({newStatus}, req) {
         if(!req.isAuth) {
             return;

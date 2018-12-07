@@ -20,7 +20,6 @@ module.exports = {
             _id: user._id.toString()
         }
     },
-    
     setUserStatus: async function({newStatus}, req) {
         if(!req.isAuth) {
             return;
@@ -116,13 +115,11 @@ module.exports = {
     },
     createPost: async function (args, req) {
 
-
         if (!req.isAuth) { /* see middleware just before graphql handler */
             const error = new Error('User is not authenticated');
             error.statusCode = 401;
             throw error;
         }
-
 
         const input = args.postInput;
 
@@ -140,14 +137,12 @@ module.exports = {
             throw error;
         }
 
-
         const user = await User.findById(req.userId);
         if (!user) {
             const error = new Error('Invalid user!');
             error.statusCode = 401;
             throw error;
         }
-
 
         const newPost = new Post({
             title: input.title,
@@ -287,7 +282,6 @@ module.exports = {
             createdAt: updatedPost.createdAt.toISOString(),
             updatedAt: updatedPost.updatedAt.toISOString()
         }
-
     },
     deletePost: async function ({ id }, req) {
 
